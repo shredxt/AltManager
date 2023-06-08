@@ -1,0 +1,9 @@
+## Interface: 100100
+## Title: Alt Manager
+## Author: Shredxt
+## Version: v3.2.0
+## Notes: Concise information about your alts and weekly stuff.
+## SavedVariables: MethodAltManagerDB
+
+embeds.xml
+AltManager.lua
