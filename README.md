@@ -1,3 +1,3 @@
 # AltManager
 
-![image](https://github.com/shredxt/AltManager/assets/47064656/696c2f92-26e8-491e-b74a-b0c02a103977)
+![image](https://github.com/shredxt/AltManager/assets/47064656/5a119f97-313d-4757-b012-537ef43c013a)
