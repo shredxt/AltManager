@@ -8,7 +8,7 @@ local sizey = 455;
 local instances_y_add = 45;
 local xoffset = 0;
 local yoffset = 40;
-local addon = "AltManager";
+local addonName = "AltManager";
 local per_alt_x = 120;
 local ilvl_text_size = 8;
 local remove_button_size = 12;
@@ -21,7 +21,6 @@ local worldboss_label = "World Boss"
 local aiding_the_accord_label = "Aiding the Accord"
 local conquest_label = "Conquest"
 local conquest_earned_label = "Conquest Earned"
-local gold_label = "Gold"
 local supplies_label = "Dragon Isles Supplies"
 local elemental_overflow_label = "Elemental Overflow"
 local storm_sigil_label = "Storm Sigil"
@@ -89,7 +88,6 @@ local dungeons = {
 	[406] = "HOI"
 };
 
-
 SLASH_ALTMANAGER1 = "/mam";
 SLASH_ALTMANAGER2 = "/alts";
 
@@ -135,54 +133,62 @@ function SlashCmdList.ALTMANAGER(cmd, editbox)
 end
 
 do
-	local main_frame = CreateFrame("frame", "AltManagerFrame", UIParent);
-	AltManager.main_frame = main_frame;
-	main_frame:SetFrameStrata("MEDIUM");
-	main_frame.background = main_frame:CreateTexture(nil, "BACKGROUND");
-	main_frame.background:SetAllPoints();
-	main_frame.background:SetDrawLayer("ARTWORK", 1);
-	main_frame.background:SetColorTexture(0, 0, 0, 0.5);
+	local main_frame = CreateFrame("frame", "AltManagerFrame", UIParent)
+	AltManager.main_frame = main_frame
+	main_frame:SetFrameStrata("MEDIUM")
+	main_frame.background = main_frame:CreateTexture(nil, "BACKGROUND")
+	main_frame.background:SetAllPoints()
+	main_frame.background:SetDrawLayer("ARTWORK", 1)
+	main_frame.background:SetColorTexture(0, 0, 0, 0.5)
 
 	-- Set frame position
-	main_frame:ClearAllPoints();
-	main_frame:SetPoint("CENTER", UIParent, "CENTER", xoffset, yoffset);
-	main_frame:RegisterEvent("ADDON_LOADED");
-	main_frame:RegisterEvent("PLAYER_LOGIN");
-	main_frame:RegisterEvent("PLAYER_LOGOUT");
-	main_frame:RegisterEvent("QUEST_TURNED_IN");
-	main_frame:RegisterEvent("BAG_UPDATE_DELAYED");
-	main_frame:RegisterEvent("ARTIFACT_XP_UPDATE");
-	main_frame:RegisterEvent("CHAT_MSG_CURRENCY");
-	main_frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE");
-	main_frame:RegisterEvent("PLAYER_LEAVING_WORLD");
+	main_frame:ClearAllPoints()
+	main_frame:SetPoint("CENTER", UIParent, "CENTER", xoffset, yoffset)
+	main_frame:RegisterEvent("ADDON_LOADED")
+	main_frame:RegisterEvent("PLAYER_LOGIN")
+	main_frame:RegisterEvent("PLAYER_LOGOUT")
+	main_frame:RegisterEvent("QUEST_TURNED_IN")
+	main_frame:RegisterEvent("BAG_UPDATE_DELAYED")
+	main_frame:RegisterEvent("ARTIFACT_XP_UPDATE")
+	main_frame:RegisterEvent("CHAT_MSG_CURRENCY")
+	main_frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+	main_frame:RegisterEvent("PLAYER_LEAVING_WORLD")
 
-	main_frame:SetScript("OnEvent", function(self, ...)
-		local event, loaded = ...;
+	main_frame:SetScript("OnEvent", function(self, event, ...)
 		if event == "ADDON_LOADED" then
-			if addon == loaded then
-      			AltManager:OnLoad();
+			local loadedAddon = ...
+			if loadedAddon == addonName then
+				AltManager:OnLoad()
+			end
+		elseif event == "PLAYER_LOGIN" then
+			AltManager:OnLogin()
+		elseif event == "PLAYER_LEAVING_WORLD" or event == "ARTIFACT_XP_UPDATE" then
+			local data = AltManager:CollectData()
+			AltManager:StoreData(data)
+		elseif event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE" then
+			if AltManager.addon_loaded then
+				local data = AltManager:CollectData()
+				AltManager:StoreData(data)
 			end
 		end
-		if event == "PLAYER_LOGIN" then
-        	AltManager:OnLogin();
-		end
-		if event == "PLAYER_LEAVING_WORLD" or event == "ARTIFACT_XP_UPDATE" then
-			local data = AltManager:CollectData(false);
-			AltManager:StoreData(data);
-		end
-		if (event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE") and AltManager.addon_loaded then
-			local data = AltManager:CollectData(false);
-			AltManager:StoreData(data);
-		end
-
 	end)
 
-	main_frame:EnableKeyboard(true);
-	main_frame:SetScript("OnKeyDown", function(self, key) if key == "ESCAPE" then main_frame:SetPropagateKeyboardInput(false); else main_frame:SetPropagateKeyboardInput(true); end end )
-	main_frame:SetScript("OnKeyUp", function(self, key) if key == "ESCAPE" then  AltManager:HideInterface() end end);
+	main_frame:EnableKeyboard(true)
+	main_frame:SetScript("OnKeyDown", function(self, key)
+		if key == "ESCAPE" then
+			main_frame:SetPropagateKeyboardInput(false)
+		else
+			main_frame:SetPropagateKeyboardInput(true)
+		end
+	end)
+	main_frame:SetScript("OnKeyUp", function(self, key)
+		if key == "ESCAPE" then
+			AltManager:HideInterface()
+		end
+	end)
 
 	-- Show Frame
-	main_frame:Hide();
+	main_frame:Hide()
 end
 
 function AltManager:InitDB()
@@ -393,41 +399,26 @@ function AltManager:RemoveCharacterByGuid(index, skip_confirmation)
 end
 
 function AltManager:StoreData(data)
-
-	if not self.addon_loaded then
+	if not self.addon_loaded or not data or not data.guid or UnitLevel('player') < min_level then
 		return
 	end
 
-	-- This can happen shortly after logging in, the game doesn't know the characters guid yet
-	if not data or not data.guid then
-		return
-	end
+	local db = MethodAltManagerDB
+	local guid = data.guid
 
-	if UnitLevel('player') < min_level then return end;
+	db.data = db.data or {}
 
-	local db = MethodAltManagerDB;
-	local guid = data.guid;
-
-	db.data = db.data or {};
-
-	local update = false;
-	for k, v in pairs(db.data) do
-		if k == guid then
-			update = true;
-		end
-	end
-
-	if not update then
-		db.data[guid] = data;
-		db.alts = db.alts + 1;
+	if not db.data[guid] then
+		db.data[guid] = data
+		db.alts = db.alts + 1
 	else
-		local lvl = db.data[guid].artifact_level;
-		data.artifact_level = data.artifact_level or lvl;
-		db.data[guid] = data;
+		local lvl = db.data[guid].artifact_level
+		data.artifact_level = data.artifact_level or lvl
+		db.data[guid] = data
 	end
 end
 
-function AltManager:CollectData(do_artifact)
+function AltManager:CollectData()
 
 	if UnitLevel('player') < min_level then return end;
 	-- this is an awful hack that will probably have some unforeseen consequences,
@@ -435,9 +426,6 @@ function AltManager:CollectData(do_artifact)
 	-- goes.
 	_, i = GetAverageItemLevel()
 	if i == 0 then return end;
-
-	-- fix this when i'm not on a laptop at work
-	do_artifact = false
 
 	local name = UnitName('player')
 	local _, class = UnitClass('player')
@@ -778,32 +766,33 @@ function AltManager:MythicRunHistoryString(alt_data, vault_slot)
     elseif vault_slot == 2 then
         local max_runs = math.min(4, total_runs)
         for run = 2, max_runs do
-            result = result .. tostring(sorted_history[run].level) .. " "
+            local run_level = tostring(sorted_history[run].level)
+            if run == 4 then
+                run_level = "|cFF00FF00" .. run_level .. "|r"
+            end
+            result = result .. run_level .. " "
         end
     elseif vault_slot == 3 then
         local max_runs = math.min(8, total_runs)
         for run = 5, max_runs do
-            result = result .. tostring(sorted_history[run].level) .. " "
-        end
-    end
-
-    local highlighted_runs = {1, 4, 8}
-    for _, slot in ipairs(highlighted_runs) do
-        if vault_slot == slot and total_runs >= slot then
-            local target_level = sorted_history[slot].level
-            result = result:gsub(tostring(target_level), "|cFF00FF00" .. tostring(target_level) .. "|r")
+            local run_level = tostring(sorted_history[run].level)
+            if run == 8 then
+                run_level = "|cFF00FF00" .. run_level .. "|r"
+            end
+            result = result .. run_level .. " "
         end
     end
 
     return result ~= "" and result or "-"
 end
 
+
 function AltManager:CreateContent()
 
 	-- Close button
 	self.main_frame.closeButton = CreateFrame("Button", "CloseButton", self.main_frame, "UIPanelCloseButton");
 	self.main_frame.closeButton:ClearAllPoints()
-	self.main_frame.closeButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT", -10, -2);
+	self.main_frame.closeButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT", -5, 2);
 	self.main_frame.closeButton:SetScript("OnClick", function() AltManager:HideInterface(); end);
 	--self.main_frame.closeButton:SetSize(32, h);
 
